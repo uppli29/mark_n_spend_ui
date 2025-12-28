@@ -1,97 +1,103 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dashboard } from './components/dashboard';
 import { Expenses } from './components/expenses';
 import { Accounts } from './components/accounts';
 import { AuthPage } from './components/auth/auth-page';
 import { AuthProvider, useAuth } from './components/auth/auth-context';
-import { LayoutDashboard, Receipt, Wallet, Moon, Sun, LogOut } from 'lucide-react';
-
-export interface Account {
-  id: string;
-  name: string;
-  type: 'BANK' | 'CARD';
-  balance: number;
-}
-
-export interface Expense {
-  id: string;
-  amount: number;
-  category: string;
-  description: string;
-  date: string;
-  accountId: string;
-}
+import { LayoutDashboard, Receipt, Wallet, Moon, Sun, LogOut, Loader2 } from 'lucide-react';
+import { getAccounts, createAccount, deleteAccount as deleteAccountApi, Account } from './services/accounts-service';
+import { createExpense } from './services/expenses-service';
+import { getCategories, Category } from './services/categories-service';
 
 function AppContent() {
-  const { isAuthenticated, isLoading, logout, user } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, logout, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'expenses' | 'accounts'>('dashboard');
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   useEffect(() => {
     const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     if (storedTheme) {
       setTheme(storedTheme);
       document.documentElement.classList.toggle('dark', storedTheme === 'dark');
-    }
-  }, []);
-
-  useEffect(() => {
-    const storedExpenses = localStorage.getItem('expenses');
-    const storedAccounts = localStorage.getItem('accounts');
-
-    if (storedExpenses) {
-      setExpenses(JSON.parse(storedExpenses));
-    }
-
-    if (storedAccounts) {
-      setAccounts(JSON.parse(storedAccounts));
     } else {
-      // Initialize with default accounts
-      const defaultAccounts: Account[] = [
-        { id: '1', name: 'Chase Checking', type: 'BANK', balance: 5000 },
-        { id: '2', name: 'Visa Credit Card', type: 'CARD', balance: 0 },
-      ];
-      setAccounts(defaultAccounts);
-      localStorage.setItem('accounts', JSON.stringify(defaultAccounts));
+      // Default to dark theme
+      setTheme('dark');
+      document.documentElement.classList.add('dark');
     }
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('expenses', JSON.stringify(expenses));
-  }, [expenses]);
+  // Fetch only accounts and categories (shared data)
+  // Each page fetches its own expenses as needed
+  const fetchData = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    setIsLoadingData(true);
+    try {
+      const [accountsData, categoriesData] = await Promise.all([
+        getAccounts(),
+        getCategories(),
+      ]);
+      setAccounts(accountsData);
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    localStorage.setItem('accounts', JSON.stringify(accounts));
-  }, [accounts]);
+    fetchData();
+  }, [fetchData]);
 
-  const addExpense = (expense: Omit<Expense, 'id'>) => {
-    const newExpense = {
-      ...expense,
-      id: Date.now().toString(),
-    };
-    setExpenses([newExpense, ...expenses]);
+  const addExpense = async (expenseData: {
+    amount: number;
+    categoryId: string;
+    description: string;
+    date: string;
+    accountId: string;
+  }) => {
+    try {
+      await createExpense({
+        amount: expenseData.amount,
+        category_id: expenseData.categoryId,
+        account_id: expenseData.accountId,
+        description: expenseData.description,
+        expense_date: expenseData.date,
+      });
+    } catch (error) {
+      console.error('Failed to add expense:', error);
+      alert('Failed to add expense. Please try again.');
+    }
   };
 
-  const deleteExpense = (id: string) => {
-    setExpenses(expenses.filter(exp => exp.id !== id));
+  const addAccount = async (accountData: { name: string; type: 'BANK' | 'CARD' }) => {
+    try {
+      const newAccount = await createAccount({
+        name: accountData.name,
+        type: accountData.type,
+      });
+      setAccounts([...accounts, newAccount]);
+    } catch (error) {
+      console.error('Failed to add account:', error);
+      alert('Failed to add account. Please try again.');
+    }
   };
 
-  const addAccount = (account: Omit<Account, 'id'>) => {
-    const newAccount = {
-      ...account,
-      id: Date.now().toString(),
-    };
-    setAccounts([...accounts, newAccount]);
+  const handleDeleteAccount = async (id: string) => {
+    try {
+      await deleteAccountApi(id);
+      setAccounts(accounts.filter(acc => acc.id !== id));
+    } catch (error) {
+      console.error('Failed to delete account:', error);
+      alert('Failed to delete account. Please try again.');
+    }
   };
 
-  const deleteAccount = (id: string) => {
-    setAccounts(accounts.filter(acc => acc.id !== id));
-    setExpenses(expenses.filter(exp => exp.accountId !== id));
-  };
-
-  const updateAccount = (id: string, updates: Partial<Account>) => {
+  const updateAccount = async (id: string, updates: Partial<Account>) => {
     setAccounts(accounts.map(acc =>
       acc.id === id ? { ...acc, ...updates } : acc
     ));
@@ -111,10 +117,10 @@ function AppContent() {
   ];
 
   // Show loading spinner while checking auth status
-  if (isLoading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
       </div>
     );
   }
@@ -178,24 +184,35 @@ function AppContent() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        {activeTab === 'dashboard' && (
-          <Dashboard expenses={expenses} accounts={accounts} onAddExpense={addExpense} />
-        )}
-        {activeTab === 'expenses' && (
-          <Expenses
-            expenses={expenses}
-            accounts={accounts}
-            onDeleteExpense={deleteExpense}
-          />
-        )}
-        {activeTab === 'accounts' && (
-          <Accounts
-            accounts={accounts}
-            expenses={expenses}
-            onAddAccount={addAccount}
-            onDeleteAccount={deleteAccount}
-            onUpdateAccount={updateAccount}
-          />
+        {isLoadingData ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          </div>
+        ) : (
+          <>
+            {activeTab === 'dashboard' && (
+              <Dashboard
+                accounts={accounts}
+                categories={categories}
+                onAddExpense={addExpense}
+                onExpenseAdded={() => { }}
+              />
+            )}
+            {activeTab === 'expenses' && (
+              <Expenses
+                accounts={accounts}
+                categories={categories}
+              />
+            )}
+            {activeTab === 'accounts' && (
+              <Accounts
+                accounts={accounts}
+                onAddAccount={addAccount}
+                onDeleteAccount={handleDeleteAccount}
+                onUpdateAccount={updateAccount}
+              />
+            )}
+          </>
         )}
       </main>
     </div>

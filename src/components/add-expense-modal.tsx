@@ -1,33 +1,32 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
-import { Expense, Account } from '../App';
-
-const CATEGORIES = [
-  'Food',
-  'Transportation',
-  'Entertainment',
-  'Shopping',
-  'Bills',
-  'Healthcare',
-  'Other',
-];
+import { X, Loader2 } from 'lucide-react';
+import { Account } from '../services/accounts-service';
+import { Category } from '../services/categories-service';
 
 interface AddExpenseModalProps {
   accounts: Account[];
+  categories: Category[];
   onClose: () => void;
-  onAdd: (expense: Omit<Expense, 'id'>) => void;
+  onAdd: (expense: {
+    amount: number;
+    categoryId: string;
+    description: string;
+    date: string;
+    accountId: string;
+  }) => void;
 }
 
-export function AddExpenseModal({ accounts, onClose, onAdd }: AddExpenseModalProps) {
+export function AddExpenseModal({ accounts, categories, onClose, onAdd }: AddExpenseModalProps) {
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [accountId, setAccountId] = useState(accounts[0]?.id || '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!amount || parseFloat(amount) <= 0) {
       alert('Please enter a valid amount');
       return;
@@ -38,15 +37,26 @@ export function AddExpenseModal({ accounts, onClose, onAdd }: AddExpenseModalPro
       return;
     }
 
-    onAdd({
-      amount: parseFloat(amount),
-      category,
-      description,
-      date,
-      accountId,
-    });
+    if (!categoryId) {
+      alert('Please select a category');
+      return;
+    }
 
-    onClose();
+    setIsSubmitting(true);
+    try {
+      await onAdd({
+        amount: parseFloat(amount),
+        categoryId,
+        description,
+        date,
+        accountId,
+      });
+      onClose();
+    } catch (error) {
+      console.error('Failed to add expense:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -85,15 +95,20 @@ export function AddExpenseModal({ accounts, onClose, onAdd }: AddExpenseModalPro
             </label>
             <select
               id="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
               className="w-full px-4 py-2 bg-input-background border border-input rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-foreground"
+              required
             >
-              {CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
+              {categories.length === 0 ? (
+                <option value="">No categories available</option>
+              ) : (
+                categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -159,10 +174,17 @@ export function AddExpenseModal({ accounts, onClose, onAdd }: AddExpenseModalPro
             </button>
             <button
               type="submit"
-              disabled={accounts.length === 0}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={accounts.length === 0 || categories.length === 0 || isSubmitting}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              Add Expense
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Expense'
+              )}
             </button>
           </div>
         </form>

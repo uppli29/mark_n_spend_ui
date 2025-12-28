@@ -1,13 +1,22 @@
-import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Loader2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Expense, Account } from '../App';
 import { AddExpenseModal } from './add-expense-modal';
+import { Account } from '../services/accounts-service';
+import { Expense, getExpenses, getExpenseSummary, ExpenseSummary } from '../services/expenses-service';
+import { Category } from '../services/categories-service';
 
 interface DashboardProps {
-  expenses: Expense[];
   accounts: Account[];
-  onAddExpense: (expense: Omit<Expense, 'id'>) => void;
+  categories: Category[];
+  onAddExpense: (expense: {
+    amount: number;
+    categoryId: string;
+    description: string;
+    date: string;
+    accountId: string;
+  }) => void;
+  onExpenseAdded: () => void;
 }
 
 const COLORS: Record<string, string> = {
@@ -20,56 +29,95 @@ const COLORS: Record<string, string> = {
   Other: '#6b7280',
 };
 
-export function Dashboard({ expenses, accounts, onAddExpense }: DashboardProps) {
+const DEFAULT_COLORS = ['#fb923c', '#3b82f6', '#a855f7', '#ec4899', '#ef4444', '#10b981', '#6b7280', '#f59e0b', '#06b6d4'];
+
+export function Dashboard({ accounts, categories, onAddExpense, onExpenseAdded }: DashboardProps) {
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+  const [weeklySummary, setWeeklySummary] = useState<ExpenseSummary | null>(null);
+  const [monthlySummary, setMonthlySummary] = useState<ExpenseSummary | null>(null);
+  const [recentExpenses, setRecentExpenses] = useState<Expense[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
+  // Create a map for category names
+  const categoryMap = new Map(categories.map(cat => [cat.id, cat.name]));
 
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  const weeklyExpenses = expenses.filter(exp => {
-    const expDate = new Date(exp.date + 'T00:00:00');
-    return expDate >= startOfWeek;
-  });
-
-  const monthlyExpenses = expenses.filter(exp => {
-    const expDate = new Date(exp.date + 'T00:00:00');
-    return expDate >= startOfMonth;
-  });
-
-  const getChartData = (expenseList: Expense[]) => {
-    const categoryTotals = expenseList.reduce((acc, expense) => {
-      acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
-
-    return Object.entries(categoryTotals).map(([name, value]) => ({
-      name,
-      value: parseFloat(value.toFixed(2)),
-    }));
+  const getCategoryName = (categoryId: string) => {
+    return categoryMap.get(categoryId) || 'Unknown';
   };
 
-  const weeklyData = getChartData(weeklyExpenses);
-  const monthlyData = getChartData(monthlyExpenses);
+  const getColor = (categoryName: string, index: number) => {
+    return COLORS[categoryName] || DEFAULT_COLORS[index % DEFAULT_COLORS.length];
+  };
 
-  const recentExpenses = [...expenses]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 10);
+  // Fetch dashboard data using optimized API calls
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [weekly, monthly, recent] = await Promise.all([
+        getExpenseSummary('weekly'),
+        getExpenseSummary('monthly'),
+        getExpenses({ limit: 10 }), // Only fetch 10 most recent
+      ]);
+      setWeeklySummary(weekly);
+      setMonthlySummary(monthly);
+      setRecentExpenses(recent);
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const handleAddExpense = async (expenseData: {
+    amount: number;
+    categoryId: string;
+    description: string;
+    date: string;
+    accountId: string;
+  }) => {
+    await onAddExpense(expenseData);
+    onExpenseAdded();
+    // Refresh dashboard data after adding expense
+    fetchDashboardData();
   };
 
   const getAccountName = (accountId: string) => {
     return accounts.find(acc => acc.id === accountId)?.name || 'Unknown Account';
   };
 
-  const weeklyTotal = weeklyExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const monthlyTotal = monthlyExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  // Convert summary by_category to chart data
+  const getChartDataFromSummary = (summary: ExpenseSummary | null) => {
+    if (!summary) return [];
+    return summary.by_category.map(cat => ({
+      name: cat.category_name,
+      value: typeof cat.total === 'number' ? parseFloat(cat.total.toFixed(2)) : parseFloat(String(cat.total)),
+    }));
+  };
+
+  const weeklyData = getChartDataFromSummary(weeklySummary);
+  const monthlyData = getChartDataFromSummary(monthlySummary);
+
+  const weeklyTotal = weeklySummary ?
+    (typeof weeklySummary.total === 'number' ? weeklySummary.total : parseFloat(String(weeklySummary.total))) : 0;
+  const monthlyTotal = monthlySummary ?
+    (typeof monthlySummary.total === 'number' ? monthlySummary.total : parseFloat(String(monthlySummary.total))) : 0;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -103,8 +151,8 @@ export function Dashboard({ expenses, accounts, onAddExpense }: DashboardProps) 
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {weeklyData.map((entry) => (
-                    <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} />
+                  {weeklyData.map((entry, index) => (
+                    <Cell key={`cell-${entry.name}`} fill={getColor(entry.name, index)} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => `$${value}`} contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0.5rem', color: 'var(--foreground)' }} />
@@ -136,8 +184,8 @@ export function Dashboard({ expenses, accounts, onAddExpense }: DashboardProps) 
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {monthlyData.map((entry) => (
-                    <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} />
+                  {monthlyData.map((entry, index) => (
+                    <Cell key={`cell-${entry.name}`} fill={getColor(entry.name, index)} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => `$${value}`} contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0.5rem', color: 'var(--foreground)' }} />
@@ -162,31 +210,34 @@ export function Dashboard({ expenses, accounts, onAddExpense }: DashboardProps) 
               No expenses yet. Add your first expense to get started!
             </div>
           ) : (
-            recentExpenses.map((expense) => (
-              <div
-                key={expense.id}
-                className="p-4 hover:bg-accent transition-colors"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="text-foreground">{expense.description}</span>
-                      <span className="px-2 py-1 bg-muted text-muted-foreground rounded">
-                        {expense.category}
-                      </span>
+            recentExpenses.map((expense) => {
+              const amount = typeof expense.amount === 'number' ? expense.amount : parseFloat(String(expense.amount));
+              return (
+                <div
+                  key={expense.id}
+                  className="p-4 hover:bg-accent transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1">
+                        <span className="text-foreground">{expense.description || 'No description'}</span>
+                        <span className="px-2 py-1 bg-muted text-muted-foreground rounded">
+                          {getCategoryName(expense.category_id)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        <span>{formatDate(expense.expense_date)}</span>
+                        <span>•</span>
+                        <span>{getAccountName(expense.account_id)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <span>{formatDate(expense.date)}</span>
-                      <span>•</span>
-                      <span>{getAccountName(expense.accountId)}</span>
+                    <div className="text-foreground">
+                      ${amount.toFixed(2)}
                     </div>
-                  </div>
-                  <div className="text-foreground">
-                    ${expense.amount.toFixed(2)}
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -194,8 +245,9 @@ export function Dashboard({ expenses, accounts, onAddExpense }: DashboardProps) 
       {isAddExpenseOpen && (
         <AddExpenseModal
           accounts={accounts}
+          categories={categories}
           onClose={() => setIsAddExpenseOpen(false)}
-          onAdd={onAddExpense}
+          onAdd={handleAddExpense}
         />
       )}
     </div>

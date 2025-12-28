@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { X } from "lucide-react";
-import { Account } from "../App";
+import { X, Loader2 } from "lucide-react";
 
 interface AddAccountModalProps {
   onClose: () => void;
-  onAdd: (account: Omit<Account, "id">) => void;
+  onAdd: (account: { name: string; type: "BANK" | "CARD" }) => void;
 }
 
 export function AddAccountModal({
@@ -13,9 +12,9 @@ export function AddAccountModal({
 }: AddAccountModalProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"BANK" | "CARD">("BANK");
-  const [balance, setBalance] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!name.trim()) {
@@ -23,18 +22,18 @@ export function AddAccountModal({
       return;
     }
 
-    if (!balance || parseFloat(balance) < 0) {
-      alert("Please enter a valid balance");
-      return;
+    setIsSubmitting(true);
+    try {
+      await onAdd({
+        name: name.trim(),
+        type,
+      });
+      onClose();
+    } catch (error) {
+      console.error("Failed to add account:", error);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onAdd({
-      name: name.trim(),
-      type,
-      balance: parseFloat(balance),
-    });
-
-    onClose();
   };
 
   return (
@@ -89,25 +88,6 @@ export function AddAccountModal({
             </select>
           </div>
 
-          <div>
-            <label
-              htmlFor="balance"
-              className="block text-foreground mb-2"
-            >
-              Initial Balance ($)
-            </label>
-            <input
-              type="number"
-              id="balance"
-              step="0.01"
-              value={balance}
-              onChange={(e) => setBalance(e.target.value)}
-              className="w-full px-4 py-2 bg-input-background border border-input rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-foreground"
-              placeholder="0.00"
-              required
-            />
-          </div>
-
           <div className="flex gap-3 pt-4">
             <button
               type="button"
@@ -118,9 +98,17 @@ export function AddAccountModal({
             </button>
             <button
               type="submit"
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              disabled={isSubmitting}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              Add Account
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                "Add Account"
+              )}
             </button>
           </div>
         </form>

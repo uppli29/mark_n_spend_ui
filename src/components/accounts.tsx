@@ -1,37 +1,82 @@
-import { useState } from 'react';
-import { Plus, CreditCard, Building2, Trash2 } from 'lucide-react';
-import { Account, Expense } from '../App';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, CreditCard, Building2, Trash2, Loader2 } from 'lucide-react';
 import { AddAccountModal } from './add-account-modal';
+import { Account } from '../services/accounts-service';
+import { getExpenses, Expense } from '../services/expenses-service';
 
 interface AccountsProps {
   accounts: Account[];
-  expenses: Expense[];
-  onAddAccount: (account: Omit<Account, 'id'>) => void;
+  onAddAccount: (account: { name: string; type: 'BANK' | 'CARD' }) => void;
   onDeleteAccount: (id: string) => void;
   onUpdateAccount: (id: string, updates: Partial<Account>) => void;
 }
 
-export function Accounts({ accounts, expenses, onAddAccount, onDeleteAccount }: AccountsProps) {
+interface AccountStats {
+  totalExpenses: number;
+  expenseCount: number;
+}
+
+export function Accounts({ accounts, onAddAccount, onDeleteAccount }: AccountsProps) {
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [accountStats, setAccountStats] = useState<Map<string, AccountStats>>(new Map());
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
 
-  const getAccountExpenseTotal = (accountId: string) => {
-    return expenses
-      .filter(exp => exp.accountId === accountId)
-      .reduce((sum, exp) => sum + exp.amount, 0);
+  // Fetch expenses to calculate stats per account
+  const fetchAccountStats = useCallback(async () => {
+    if (accounts.length === 0) {
+      setIsLoadingStats(false);
+      return;
+    }
+
+    setIsLoadingStats(true);
+    try {
+      // Fetch all expenses to calculate per-account stats
+      const expenses = await getExpenses({ limit: 500 });
+
+      const stats = new Map<string, AccountStats>();
+      accounts.forEach(account => {
+        const accountExpenses = expenses.filter((exp: Expense) => exp.account_id === account.id);
+        const totalExpenses = accountExpenses.reduce((sum: number, exp: Expense) => {
+          const amount = typeof exp.amount === 'number' ? exp.amount : parseFloat(String(exp.amount));
+          return sum + amount;
+        }, 0);
+
+        stats.set(account.id, {
+          totalExpenses,
+          expenseCount: accountExpenses.length,
+        });
+      });
+
+      setAccountStats(stats);
+    } catch (error) {
+      console.error('Failed to fetch account stats:', error);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [accounts]);
+
+  useEffect(() => {
+    fetchAccountStats();
+  }, [fetchAccountStats]);
+
+  const getAccountStats = (accountId: string): AccountStats => {
+    return accountStats.get(accountId) || { totalExpenses: 0, expenseCount: 0 };
   };
 
-  const getAccountExpenseCount = (accountId: string) => {
-    return expenses.filter(exp => exp.accountId === accountId).length;
-  };
-
-  const handleDeleteAccount = (id: string) => {
-    const expenseCount = getAccountExpenseCount(id);
-    if (expenseCount > 0) {
-      if (window.confirm(`This account has ${expenseCount} expense(s). Deleting this account will also delete all associated expenses. Are you sure?`)) {
-        onDeleteAccount(id);
+  const handleDeleteAccount = async (id: string) => {
+    const stats = getAccountStats(id);
+    if (stats.expenseCount > 0) {
+      if (!window.confirm(`This account has ${stats.expenseCount} expense(s). Deleting this account will also delete all associated expenses. Are you sure?`)) {
+        return;
       }
-    } else {
-      onDeleteAccount(id);
+    }
+
+    setDeletingId(id);
+    try {
+      await onDeleteAccount(id);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -59,12 +104,16 @@ export function Accounts({ accounts, expenses, onAddAccount, onDeleteAccount }: 
             Add Your First Account
           </button>
         </div>
+      ) : isLoadingStats ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {accounts.map((account) => {
-            const totalExpenses = getAccountExpenseTotal(account.id);
-            const expenseCount = getAccountExpenseCount(account.id);
-            
+            const stats = getAccountStats(account.id);
+            const isDeleting = deletingId === account.id;
+
             return (
               <div
                 key={account.id}
@@ -73,11 +122,10 @@ export function Accounts({ accounts, expenses, onAddAccount, onDeleteAccount }: 
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                        account.type === 'BANK' 
-                          ? 'bg-blue-600' 
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${account.type === 'BANK'
+                          ? 'bg-blue-600'
                           : 'bg-purple-600'
-                      }`}>
+                        }`}>
                         {account.type === 'BANK' ? (
                           <Building2 className="w-6 h-6 text-white" />
                         ) : (
@@ -86,42 +134,36 @@ export function Accounts({ accounts, expenses, onAddAccount, onDeleteAccount }: 
                       </div>
                       <div>
                         <h3 className="text-foreground">{account.name}</h3>
-                        <span className={`inline-block px-2 py-1 rounded mt-1 ${
-                          account.type === 'BANK'
+                        <span className={`inline-block px-2 py-1 rounded mt-1 ${account.type === 'BANK'
                             ? 'bg-blue-600 text-white'
                             : 'bg-purple-600 text-white'
-                        }`}>
+                          }`}>
                           {account.type}
                         </span>
                       </div>
                     </div>
                     <button
                       onClick={() => handleDeleteAccount(account.id)}
-                      className="text-muted-foreground hover:text-red-600 transition-colors"
+                      disabled={isDeleting}
+                      className="text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-50"
                       aria-label="Delete account"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      {isDeleting ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-5 h-5" />
+                      )}
                     </button>
                   </div>
 
                   <div className="space-y-3 pt-4 border-t border-border">
                     <div>
-                      <p className="text-muted-foreground">Initial Balance</p>
-                      <p className="text-foreground">${account.balance.toFixed(2)}</p>
-                    </div>
-                    <div>
                       <p className="text-muted-foreground">Total Expenses</p>
-                      <p className="text-red-600">${totalExpenses.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Current Balance</p>
-                      <p className="text-foreground">
-                        ${(account.balance - totalExpenses).toFixed(2)}
-                      </p>
+                      <p className="text-red-600">${stats.totalExpenses.toFixed(2)}</p>
                     </div>
                     <div className="pt-2 border-t border-border">
                       <p className="text-muted-foreground">
-                        {expenseCount} expense{expenseCount !== 1 ? 's' : ''}
+                        {stats.expenseCount} expense{stats.expenseCount !== 1 ? 's' : ''}
                       </p>
                     </div>
                   </div>
