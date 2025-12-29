@@ -1,5 +1,6 @@
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Expense } from '../App';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend } from './ui/chart';
 
 interface ExpenseChartProps {
   expenses: Expense[];
@@ -26,29 +27,36 @@ export function ExpenseChart({ expenses }: ExpenseChartProps) {
     value: parseFloat(value.toFixed(2)),
   }));
 
+  const config = data.reduce((acc, item) => {
+    acc[item.name] = { color: COLORS[item.name] };
+    return acc;
+  }, {} as Record<string, { color?: string }>);
+
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-gray-900 mb-4">Spending by Category</h2>
-      <ResponsiveContainer width="100%" height={300}>
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            labelLine={false}
-            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-            outerRadius={80}
-            fill="#8884d8"
-            dataKey="value"
-          >
-            {data.map((entry) => (
-              <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} />
-            ))}
-          </Pie>
-          <Tooltip formatter={(value) => `$${value}`} />
-          <Legend />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="rounded-lg shadow p-6 bg-background">
+      <h2 className="text-foreground mb-4">Spending by Category</h2>
+      <ChartContainer id="expenses" config={config}>
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              outerRadius={80}
+              fill="#8884d8"
+              dataKey="value"
+            >
+              {data.map((entry) => (
+                <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} />
+              ))}
+            </Pie>
+            <ChartTooltip content={<ChartTooltipContent formatter={(value) => `$${value}`} />} />
+            <ChartLegend />
+          </PieChart>
+        </ResponsiveContainer>
+      </ChartContainer>
     </div>
   );
 }
