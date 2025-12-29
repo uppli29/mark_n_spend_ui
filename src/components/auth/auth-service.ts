@@ -1,5 +1,7 @@
 // Auth API service for authentication endpoints
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL =
+    (import.meta.env.VITE_API_BASE_URL as string) ||
+    'http://localhost:8080/api/v1';
 
 export interface LoginCredentials {
     username: string;  // Backend expects username (email) for OAuth2
