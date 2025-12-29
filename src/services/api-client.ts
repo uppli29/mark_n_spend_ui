@@ -3,14 +3,18 @@ import { getAccessToken } from "../components/auth/auth-context";
 
 const API_BASE_URL =
   ((import.meta.env as any).VITE_API_BASE_URL as string) ||
-  "http://localhost:8000/api/v1";
+  "http://localhost:8080/api/v1";
+
+// Debug: Log the API URL being used (remove in production)
+console.log("API_BASE_URL:", API_BASE_URL);
+console.log("VITE_API_BASE_URL from env:", import.meta.env.VITE_API_BASE_URL);
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
 }
 
 /**
- * Base API client with automatic JWT token injection
+ * Base API client with automatic JWT token injection``
  */
 export async function apiClient<T>(
   endpoint: string,
