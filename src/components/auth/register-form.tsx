@@ -1,9 +1,16 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useMemo } from 'react';
 import { useAuth } from './auth-context';
-import { Mail, Lock, Loader2, UserPlus } from 'lucide-react';
+import { Mail, Lock, Loader2, UserPlus, Check, X } from 'lucide-react';
 
 interface RegisterFormProps {
     onSwitchToLogin: () => void;
+}
+
+interface PasswordValidation {
+    minLength: boolean;
+    hasUppercase: boolean;
+    hasLowercase: boolean;
+    hasDigit: boolean;
 }
 
 export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
@@ -14,17 +21,34 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
+    // Real-time password validation
+    const passwordValidation: PasswordValidation = useMemo(() => ({
+        minLength: password.length >= 8,
+        hasUppercase: /[A-Z]/.test(password),
+        hasLowercase: /[a-z]/.test(password),
+        hasDigit: /\d/.test(password),
+    }), [password]);
+
+    const isPasswordValid = useMemo(() =>
+        passwordValidation.minLength &&
+        passwordValidation.hasUppercase &&
+        passwordValidation.hasLowercase &&
+        passwordValidation.hasDigit,
+        [passwordValidation]);
+
+    const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
+
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setError('');
 
-        if (password !== confirmPassword) {
-            setError('Passwords do not match');
+        if (!isPasswordValid) {
+            setError('Please meet all password requirements');
             return;
         }
 
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters');
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
             return;
         }
 
@@ -38,6 +62,17 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
             setIsLoading(false);
         }
     };
+
+    const ValidationItem = ({ valid, text }: { valid: boolean; text: string }) => (
+        <div className={`password-requirement ${valid ? 'valid' : 'invalid'}`}>
+            {valid ? (
+                <Check className="requirement-icon valid" size={14} />
+            ) : (
+                <X className="requirement-icon invalid" size={14} />
+            )}
+            <span>{text}</span>
+        </div>
+    );
 
     return (
         <div className="auth-form-container">
@@ -83,10 +118,19 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="••••••••"
                             required
-                            minLength={6}
                             className="auth-input"
                         />
                     </div>
+
+                    {/* Password Requirements Checklist */}
+                    {password.length > 0 && (
+                        <div className="password-requirements">
+                            <ValidationItem valid={passwordValidation.minLength} text="At least 8 characters" />
+                            <ValidationItem valid={passwordValidation.hasUppercase} text="One uppercase letter" />
+                            <ValidationItem valid={passwordValidation.hasLowercase} text="One lowercase letter" />
+                            <ValidationItem valid={passwordValidation.hasDigit} text="One digit" />
+                        </div>
+                    )}
                 </div>
 
                 <div className="auth-input-group">
@@ -103,11 +147,28 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                             className="auth-input"
                         />
                     </div>
+
+                    {/* Password Match Indicator */}
+                    {confirmPassword.length > 0 && (
+                        <div className={`password-match ${passwordsMatch ? 'valid' : 'invalid'}`}>
+                            {passwordsMatch ? (
+                                <>
+                                    <Check className="requirement-icon valid" size={14} />
+                                    <span>Passwords match</span>
+                                </>
+                            ) : (
+                                <>
+                                    <X className="requirement-icon invalid" size={14} />
+                                    <span>Passwords do not match</span>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || !isPasswordValid || !passwordsMatch}
                     className="auth-submit-btn"
                 >
                     {isLoading ? (
