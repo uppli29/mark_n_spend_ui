@@ -196,7 +196,7 @@ export function Expenses({ accounts, categories }: ExpensesProps) {
                   <Cell key={`cell-${entry.name}`} fill={getColor(entry.name, index)} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value) => `$${value}`} contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0.5rem', color: 'var(--foreground)' }} />
+              <Tooltip formatter={(value) => `$${value}`} contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0.5rem' }} itemStyle={{ color: 'var(--foreground)' }} />
               <Legend wrapperStyle={{ color: 'var(--foreground)' }} />
             </PieChart>
           </ResponsiveContainer>
