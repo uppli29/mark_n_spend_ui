@@ -7,7 +7,6 @@ export interface Expense {
     amount: number;
     category_id: string;
     account_id: string;
-    card_id: string | null;
     description: string | null;
     expense_date: string;
     created_at: string;
@@ -17,7 +16,6 @@ export interface CreateExpenseData {
     amount: number;
     category_id: string;
     account_id: string;
-    card_id?: string | null;
     description?: string | null;
     expense_date: string;
 }
