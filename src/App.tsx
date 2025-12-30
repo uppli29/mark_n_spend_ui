@@ -131,13 +131,14 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-16 md:pb-0">
+      {/* Desktop Header Navigation */}
       <nav className="bg-card shadow-sm border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-14 md:h-16">
             <div className="flex items-center gap-2">
-              <Wallet className="w-8 h-8 text-blue-600" />
-              <span className="text-foreground">Expense Tracker</span>
+              <Wallet className="w-7 h-7 md:w-8 md:h-8 text-blue-600" />
+              <span className="text-foreground font-semibold text-sm md:text-base">Mark n Spend</span>
             </div>
             <div className="flex items-center gap-2">
               {user && (
@@ -147,12 +148,13 @@ function AppContent() {
               )}
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg hover:bg-accent transition-colors text-foreground"
+                className="p-2 rounded-lg hover:bg-accent transition-colors text-foreground touch-target"
                 aria-label="Toggle theme"
               >
                 {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
               </button>
-              <div className="flex gap-1">
+              {/* Desktop Navigation Tabs */}
+              <div className="hidden md:flex gap-1">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
@@ -160,30 +162,31 @@ function AppContent() {
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
                       className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === tab.id
-                          ? 'bg-blue-600 text-white'
-                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                         }`}
                     >
                       <Icon className="w-5 h-5" />
-                      <span className="hidden sm:inline">{tab.label}</span>
+                      <span>{tab.label}</span>
                     </button>
                   );
                 })}
               </div>
               <button
                 onClick={logout}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors touch-target"
                 aria-label="Logout"
               >
                 <LogOut className="w-5 h-5" />
-                <span className="hidden sm:inline">Logout</span>
+                <span className="hidden md:inline">Logout</span>
               </button>
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 py-4 md:py-8 sm:px-6 lg:px-8">
         {isLoadingData ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
@@ -215,6 +218,28 @@ function AppContent() {
           </>
         )}
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border md:hidden safe-area-bottom">
+        <div className="flex justify-around items-center h-16">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex flex-col items-center justify-center flex-1 h-full px-2 transition-colors touch-target ${activeTab === tab.id
+                  ? 'text-blue-600'
+                  : 'text-muted-foreground'
+                  }`}
+              >
+                <Icon className="w-6 h-6" />
+                <span className="text-xs mt-1 font-medium">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
